@@ -14,9 +14,11 @@ from __future__ import annotations
 import json
 import re
 import urllib.request
-import winreg  # noqa: F401  (Windows; 其他平台在 _load_json 中降级)
 from pathlib import Path
 from typing import Any
+
+# winreg 仅在 _proxy_url() 内按需导入(try/except 平台降级);
+# 顶层导入 Windows 专属模块会让 Linux/CI 直接 ModuleNotFoundError。
 
 from .base import (
     PortalAdapter,
