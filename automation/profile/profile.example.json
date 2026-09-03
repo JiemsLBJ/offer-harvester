@@ -1,0 +1,109 @@
+{
+  "schema_version": "1.0.0",
+  "source": "示例档案:复制为 profile.json 后替换为你的真实信息。profile.json 含个人数据,已被 .gitignore 排除,永远不要提交。字段校对清单见本目录 README.md。",
+  "updated": "1970-01-01",
+  "identity": {
+    "name": "张三",
+    "phone": "13800138000",
+    "email": "zhangsan@example.com",
+    "gender": null,
+    "birthday": null,
+    "hometown": "[城市，省份]",
+    "wechat": null,
+    "photo_path": "",
+    "id_card": {
+      "value": null,
+      "authorized": false,
+      "note": "身份证号不写入任何文件、日志或追踪表；仅在确认关卡用户明确授权该次填写时由人工输入，且不保存。"
+    },
+    "current_status": "[学校][专业]硕士在读；可立即投入实习",
+    "location": "[城市]，[省份] / [求学城市]（求学地）",
+    "linkedin": null,
+    "github": null
+  },
+  "education": [
+    {
+      "level": "硕士（在读）",
+      "school": "[硕士院校]",
+      "major": "[专业]",
+      "degree": "[专业硕士/学术硕士]",
+      "start": "20XX-09",
+      "end": "20XX-06（预计）",
+      "status": "在读",
+      "gpa": null,
+      "ranking": null,
+      "highlights": ["[研究方向、核心亮点]"]
+    },
+    {
+      "level": "本科",
+      "school": "[本科院校]",
+      "major": "[专业]",
+      "degree": "[学士学位]",
+      "start": "20XX-09",
+      "end": "20XX-06",
+      "status": "毕业",
+      "gpa": "[X.XX]",
+      "ranking": "[X/XXX]",
+      "highlights": ["[核心课程列表]"]
+    }
+  ],
+  "experience": [
+    {
+      "company": "[公司名称]",
+      "role": "[职位]",
+      "start": "20XX-XX",
+      "end": "20XX-XX",
+      "location": "[城市]",
+      "description": "[一段话概述职责与成果,写具体:项目、工具、量化结果]",
+      "bullets": [
+        "[职责/成果条目1]",
+        "[职责/成果条目2]"
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "name": "[项目名称]",
+      "start": "20XX-XX",
+      "end": "至今",
+      "role": "[独立完成/负责人/成员]",
+      "description": "[技术栈、做了什么、结果如何;结论保持审慎,不夸大]",
+      "short_60": "[60字以内短版,用于字数受限的表单字段]",
+      "keywords": ["[关键词1]", "[关键词2]"]
+    }
+  ],
+  "publications": [],
+  "awards": [
+    "[奖项1]",
+    "[奖项2]"
+  ],
+  "skills": {
+    "languages": [
+      { "name": "中文", "level": "母语" },
+      { "name": "English", "level": "[CET-4/CET-6/IELTS X.X]", "note": "[可选项:补充说明]" }
+    ],
+    "programming": [
+      "[语言/框架(具体库)]"
+    ],
+    "domain": [
+      "[领域知识:方法、工具、业务口径]"
+    ],
+    "software": ["[工具1]", "[工具2]"]
+  },
+  "self_intro": {
+    "zh_200": "[200字自我介绍:学校专业+技能+最有说服力的一个项目/经历+求职方向+到岗信息。约200字(含标点);超限时先删末句并复核字数]",
+    "zh_60": "[60字以内超短版,用于60字限制的表单字段]",
+    "note": "zh_200 用于 200 字内限制的字段;zh_60 用于 60 字以内限制。"
+  },
+  "availability": {
+    "start_date": "立即",
+    "min_months": 3,
+    "days_per_week": "5",
+    "cities": ["[城市1]", "[城市2]", "远程"],
+    "note": "[到岗时间与地点的可接受范围]"
+  },
+  "salary_expectation": {
+    "min_daily_cny": null,
+    "note": "[日薪/月薪预期;无硬性门槛可写 null 并在 note 说明]"
+  }
+}

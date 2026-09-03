@@ -1,0 +1,4 @@
+# 投递自动化运行依赖（Python 3.10+）
+# 安装：pip install -r requirements.txt
+# 浏览器：复用系统安装的 Google Chrome（channel="chrome"），无需下载 Chromium
+playwright>=1.45

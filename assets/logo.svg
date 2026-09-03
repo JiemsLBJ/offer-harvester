@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="1" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fde68a"/>
+      <stop offset="0.55" stop-color="#f59e0b"/>
+      <stop offset="1" stop-color="#d97706"/>
+    </linearGradient>
+    <linearGradient id="goldDark" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f59e0b"/>
+      <stop offset="1" stop-color="#b45309"/>
+    </linearGradient>
+  </defs>
+
+  <rect x="8" y="8" width="224" height="224" rx="48" fill="url(#bg)"/>
+  <rect x="8" y="8" width="224" height="224" rx="48" fill="none" stroke="#334155" stroke-width="2.5"/>
+
+  <!-- wheat stem -->
+  <path d="M120 198 C120 160 120 120 120 66" stroke="url(#gold)" stroke-width="7" stroke-linecap="round" fill="none"/>
+
+  <!-- top grain -->
+  <ellipse cx="120" cy="50" rx="10" ry="17" fill="url(#gold)"/>
+
+  <!-- grain pairs: left darker, right lighter -->
+  <g>
+    <ellipse cx="103" cy="72"  rx="9" ry="15" fill="url(#goldDark)" transform="rotate(38 103 72)"/>
+    <ellipse cx="137" cy="72"  rx="9" ry="15" fill="url(#gold)"     transform="rotate(-38 137 72)"/>
+    <ellipse cx="103" cy="95"  rx="9" ry="15" fill="url(#goldDark)" transform="rotate(38 103 95)"/>
+    <ellipse cx="137" cy="95"  rx="9" ry="15" fill="url(#gold)"     transform="rotate(-38 137 95)"/>
+    <ellipse cx="103" cy="118" rx="9" ry="15" fill="url(#goldDark)" transform="rotate(38 103 118)"/>
+    <ellipse cx="137" cy="118" rx="9" ry="15" fill="url(#gold)"     transform="rotate(-38 137 118)"/>
+    <ellipse cx="103" cy="141" rx="9" ry="15" fill="url(#goldDark)" transform="rotate(38 103 141)"/>
+    <ellipse cx="137" cy="141" rx="9" ry="15" fill="url(#gold)"     transform="rotate(-38 137 141)"/>
+    <ellipse cx="106" cy="163" rx="8" ry="13" fill="url(#goldDark)" transform="rotate(42 106 163)"/>
+    <ellipse cx="134" cy="163" rx="8" ry="13" fill="url(#gold)"     transform="rotate(-42 134 163)"/>
+  </g>
+
+  <!-- offer tag -->
+  <g transform="rotate(-8 172 186)">
+    <rect x="140" y="170" width="66" height="30" rx="15" fill="#22c55e"/>
+    <text x="173" y="191" font-family="-apple-system, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="17" font-weight="700" fill="#ffffff" text-anchor="middle">offer</text>
+  </g>
+</svg>

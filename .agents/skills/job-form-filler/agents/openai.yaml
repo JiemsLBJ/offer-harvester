@@ -1,0 +1,4 @@
+interface:
+  display_name: "Job Form Filler"
+  short_description: "Safely fill known and unknown job application forms"
+  default_prompt: "Use $job-form-filler to fill this job application form and stop for my review."

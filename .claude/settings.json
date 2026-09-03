@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(job-application-assistant)",
+      "Bash(bun run .agents/skills/shixiseng-search/cli/src/cli.ts:*)",
+      "Bash(bun run .agents/skills/tencent-search/cli/src/cli.ts:*)",
+      "Bash(bun run .agents/skills/hotjob-search/cli/src/cli.ts:*)",
+      "Bash(bun run .agents/skills/linkedin-search/cli/src/cli.ts:*)",
+      "Bash(bun run .agents/skills/freehire-search/cli/src/cli.ts:*)",
+      "Bash(python salary_lookup.py:*)",
+      "Bash(python3 salary_lookup.py:*)",
+      "Bash(pdftotext:*)"
+    ]
+  }
+}
