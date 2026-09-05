@@ -8,7 +8,7 @@
         [--no-tracker] [--selfcheck]
 
 --probe    只打开页面并输出表单快照（不填写、不提交），用于站点首次探路。
---review   填写后暂停，按回车才关闭浏览器，便于人工检查。
+--review   使用独立 Chrome 审核会话；命令结束后浏览器继续保留，需人工关闭。
 --selfcheck 检查依赖/档案/简历是否存在，不启动浏览器。
 """
 from __future__ import annotations
@@ -20,10 +20,17 @@ from pathlib import Path
 from typing import Any
 
 from . import config, form_learning, materials, model, state, tracker
-from .browser import BrowserError, launch, wait_for_login
+from .browser import BrowserError, launch, record_browser_event, wait_for_login
 from .confirm import ConfirmContext, confirm
 from .portals import adapter_for_url, adapter_for_name
 from .portals.base import Blocked, JobInfo
+
+
+def _current_url(page: Any, fallback: str) -> str:
+    try:
+        return page.url if page is not None else fallback
+    except Exception:
+        return fallback
 
 
 def selfcheck() -> int:
@@ -75,12 +82,19 @@ def run(url: str, *, portal: str | None = None, cv: Path | None = None,
     print(f"站点适配器: {adapter.name}")
 
     p = None
+    page = None
     job: JobInfo | None = None
+    stage = "启动浏览器"
     try:
-        p, context, page = launch(profile_dir=profile_dir, headless=headless)
+        p, context, page = launch(
+            profile_dir=profile_dir,
+            headless=headless,
+            retain_on_exit=review and not headless,
+        )
         page.set_default_timeout(config.ELEMENT_TIMEOUT_MS)
 
         if probe:
+            stage = "探路"
             # 探路模式不要求登录：直接打开页面、输出可见结构快照。
             # （申请表在登录后被渲染，因此快照后仍可能提示需要人工登录补一次探路）
             snap = adapter.probe(page, url)
@@ -92,6 +106,7 @@ def run(url: str, *, portal: str | None = None, cv: Path | None = None,
         # 登录检测：先在站点首页加载真实页面再判断（空白页会被 is_logged_in 判为
         # 未登录，避免"未等待登录就点击投递"的错误路径）
         home = adapter.home_url or adapter.login_url
+        stage = "检查登录"
         if home:
             page.goto(home, wait_until="domcontentloaded", timeout=config.NAV_TIMEOUT_MS)
         if not adapter.is_logged_in(page):
@@ -100,6 +115,7 @@ def run(url: str, *, portal: str | None = None, cv: Path | None = None,
                 page.goto(adapter.login_url, wait_until="domcontentloaded", timeout=config.NAV_TIMEOUT_MS)
             wait_for_login(context, page, adapter.is_logged_in, adapter.login_hint())
 
+        stage = "读取岗位"
         job = adapter.open_job(page, url)
         print(f"[岗位] {job.company} — {job.title}\n       {job.url}")
         if expect_company and job.company and expect_company not in job.company:
@@ -109,6 +125,7 @@ def run(url: str, *, portal: str | None = None, cv: Path | None = None,
             print(f"✗ 岗位名不匹配：期望 {expect_title}，页面 {job.title}；中止")
             return 3
 
+        stage = "准备简历"
         resume = cv or config.find_resume(job.company, prefer_docx=adapter.resume_prefers_docx)
         if resume and not resume.exists():
             print(f"简历文件不存在: {resume}")
@@ -126,6 +143,7 @@ def run(url: str, *, portal: str | None = None, cv: Path | None = None,
             if cv_upload_name:
                 print(f"[简历] 源文件: {source_resume.name}\n       实际上传文件名: {resume.name}")
 
+        stage = "打开申请表"
         adapter.open_apply_form(page, job)
         # 部分站点（腾讯已真机确认）允许匿名查看岗位详情，只有点击「申请」后
         # 才跳转到登录页。首页阶段无法可靠判断这种延迟登录，因此在进入申请
@@ -133,6 +151,7 @@ def run(url: str, *, portal: str | None = None, cv: Path | None = None,
         if not adapter.is_logged_in(page):
             print(f"[登录] 点击申请后 {adapter.name} 要求登录，等待人工完成…")
             wait_for_login(context, page, adapter.is_logged_in, adapter.login_hint())
+        stage = "填写申请表"
         steps: list[str] = ["打开申请表"]
         fields = adapter.fill_form(page, job, profile, resume)
         learned_filled = form_learning.fill_learned_fields(page, adapter.name, profile)
@@ -142,6 +161,7 @@ def run(url: str, *, portal: str | None = None, cv: Path | None = None,
         resume_record = str(resume) if resume else None
         if any("站点复用在线简历" in field for field in fields):
             resume_record = "Hotjob账号在线简历（岗位页未上传本次定向PDF）"
+        stage = "校验申请表"
         issues = adapter.verify(page, job)
         if issues:
             steps.append("校验:" + "; ".join(issues))
@@ -151,6 +171,7 @@ def run(url: str, *, portal: str | None = None, cv: Path | None = None,
         try:
             from .portals.base import dump_form_snapshot
 
+            stage = "学习表单结构"
             snapshot = dump_form_snapshot(page)
             learned = form_learning.learn_snapshot(
                 snapshot, portal=adapter.name, url=job.url, company=job.company,
@@ -176,11 +197,12 @@ def run(url: str, *, portal: str | None = None, cv: Path | None = None,
             except Exception as e:
                 print(f"（截图失败: {e}）")
             if review and not headless:
-                input("（--fill-only：未提交。浏览器将保持当前页面；检查完成后按回车关闭…）")
+                print("（--fill-only：未提交。自动化将断开，浏览器会继续保留供人工审核。）")
             else:
                 print("（--fill-only：已填写并记录，未进入提交确认；本次运行结束后浏览器会关闭。）")
             return 0
 
+        stage = "等待提交确认"
         ctx = ConfirmContext(
             portal=adapter.name,
             job_title=job.title,
@@ -194,12 +216,14 @@ def run(url: str, *, portal: str | None = None, cv: Path | None = None,
             state.record(adapter.name, job.company, job.title, job.url, "cancelled",
                          resume=resume_record, error="用户取消")
             if review and not headless:
-                input("已取消投递。浏览器将保持当前页面；检查完成后按回车关闭…")
+                print("已取消投递。自动化将断开，浏览器会继续保留供人工审核。")
             else:
                 print("已取消投递；本次运行结束后浏览器会关闭。")
             return 4
 
+        stage = "提交申请"
         adapter.submit(page, job)
+        stage = "等待提交回执"
         receipt = adapter.wait_receipt(page, job)
         final = state.record(adapter.name, job.company, job.title, job.url, "submitted",
                              resume=resume_record,
@@ -211,6 +235,13 @@ def run(url: str, *, portal: str | None = None, cv: Path | None = None,
         print(f"  记录: {config.APPLY_LOG}")
         return 0
     except Blocked as e:
+        record_browser_event(
+            "automation_blocked",
+            stage=stage,
+            portal=adapter.name,
+            url=job.url if job else _current_url(page, url),
+            error_type=type(e).__name__,
+        )
         if job is not None:
             state.record(
                 adapter.name, job.company, job.title, job.url, "blocked",
@@ -239,18 +270,35 @@ def run(url: str, *, portal: str | None = None, cv: Path | None = None,
                 print(f"  （表单学习失败: {learn_error}）")
         return 5
     except BrowserError as e:
+        record_browser_event(
+            "browser_error",
+            stage=stage,
+            portal=adapter.name,
+            url=job.url if job else _current_url(page, url),
+            error_type=type(e).__name__,
+        )
         print(f"\n⛔ 浏览器错误：{e}")
         return 6
     except Exception as e:
+        record_browser_event(
+            "automation_error",
+            stage=stage,
+            portal=adapter.name,
+            url=job.url if job else _current_url(page, url),
+            error_type=type(e).__name__,
+        )
         print(f"\n⛔ 未预期错误：{e}")
         traceback.print_exc()
         return 7
     finally:
         if p is not None:
+            retained = bool(getattr(p, "retained", False))
             try:
                 p.stop()
             except Exception:
                 pass
+            if retained:
+                print("[审核] 已断开自动化控制；Chrome 不会随 Python 退出，请审核后手动关闭该窗口。")
 
 
 def portal_names_help() -> list[str]:
@@ -270,7 +318,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--fill-only", action="store_true",
                     help="只完成 打开+登录+上传+填写+校验 并落盘（含全页截图），不进入提交确认（验证用）")
     ap.add_argument("--review", action="store_true",
-                    help="填完或取消后暂停在当前页面，按回车才关闭浏览器（不可与 --headless 同用）")
+                    help="使用独立 Chrome；填完、取消或报错后仍保留页面，需人工关闭（不可与 --headless 同用）")
     ap.add_argument("--no-tracker", action="store_true", help="不写 job_search_tracker.csv")
     ap.add_argument("--headless", action="store_true", help="无头模式（仅探路/巡检）")
     ap.add_argument(

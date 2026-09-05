@@ -1,8 +1,8 @@
 """在一个可见 Chrome 会话中准备多份申请，并保留所有审核标签页。
 
 本模块永远不调用 ``adapter.submit``，只执行岗位校验、登录等待、定向简历上传、
-安全字段填写、表单学习和截图。全部岗位处理完后阻塞在终端，直到用户按回车才
-关闭浏览器，因而适合 ``run_batch --fill-only --retain-all`` 的人工审核流程。
+安全字段填写、表单学习和截图。全部岗位处理完后断开 Playwright，但独立 Chrome
+及所有标签页继续保留，因而适合 ``run_batch --fill-only --retain-all`` 的人工审核流程。
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from . import config, form_learning, materials, model, state
-from .browser import BrowserError, launch, wait_for_login
+from .browser import BrowserError, launch, record_browser_event, wait_for_login
 from .portals import adapter_for_url
 from .portals.base import Blocked, JobInfo, dump_form_snapshot
 
@@ -134,6 +134,13 @@ def _prepare_one(page: Any, entry: dict[str, Any], resume: Path, profile: dict[s
             "page": page,
         }
     except Blocked as error:
+        record_browser_event(
+            "automation_blocked",
+            stage="批量准备申请页",
+            portal=adapter.name,
+            url=job.url if job else url,
+            error_type=type(error).__name__,
+        )
         if job is not None:
             state.record(
                 adapter.name,
@@ -160,6 +167,13 @@ def _prepare_one(page: Any, entry: dict[str, Any], resume: Path, profile: dict[s
             "page": page,
         }
     except Exception as error:
+        record_browser_event(
+            "automation_error",
+            stage="批量准备申请页",
+            portal=adapter.name,
+            url=job.url if job else url,
+            error_type=type(error).__name__,
+        )
         print(f"[{index}] ⛔ 未预期错误：{error}")
         traceback.print_exc()
         return {
@@ -191,7 +205,7 @@ def prepare_all(entries: list[dict[str, Any]], resumes: list[Path]) -> int:
     playwright = None
     results: list[dict[str, Any]] = []
     try:
-        playwright, context, first_page = launch(headless=False)
+        playwright, context, first_page = launch(headless=False, retain_on_exit=True)
         for offset, (entry, resume) in enumerate(zip(entries, prepared_resumes)):
             page = first_page if offset == 0 else context.new_page()
             page.bring_to_front()
@@ -214,11 +228,25 @@ def prepare_all(entries: list[dict[str, Any]], resumes: list[Path]) -> int:
         # 将第一个未完全填写的标签页置前；若全部成功则保留最后一个在前台。
         attention = next((item for item in results if item["status"] != "filled"), results[-1])
         attention["page"].bring_to_front()
-        input("\n浏览器中的全部申请标签页将保持打开。逐页检查完成后，回到终端按回车才关闭…")
+        print("\n自动化将断开；浏览器中的全部申请标签页会继续保留，请逐页审核后手动关闭窗口。")
         return 0 if all(item["status"] == "filled" for item in results) else 5
     except BrowserError as error:
+        record_browser_event(
+            "browser_error",
+            stage="批量启动或连接浏览器",
+            error_type=type(error).__name__,
+        )
         print(f"\n⛔ 浏览器错误：{error}")
         return 6
+    except Exception as error:
+        record_browser_event(
+            "automation_error",
+            stage="批量整理审核标签页",
+            error_type=type(error).__name__,
+        )
+        print(f"\n⛔ 批量审核页整理失败：{error}")
+        traceback.print_exc()
+        return 7
     finally:
         if playwright is not None:
             try:

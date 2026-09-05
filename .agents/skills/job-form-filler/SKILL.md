@@ -5,7 +5,7 @@ description: "Safely fills job application forms with the AI Job Search Playwrig
 
 # Job Form Filler
 
-Run from the repository's `automation` directory. Read `AUTOMATION_HANDOFF.md` before modifying adapters or safety behavior.
+Run from the repository's `automation` directory. Read `automation/README.md` and, when present, `AUTOMATION_HANDOFF.md` before modifying adapters or safety behavior.
 
 ## Choose the mode
 
@@ -31,7 +31,19 @@ Have the user log in and navigate to the actual form if necessary, then run:
 python -m apply_bot.apply_one "<direct-form-url>" --portal generic --fill-only --review
 ```
 
-Generic mode fills only empty, non-sensitive text/select fields that can be grounded in the structured profile. It does not click Apply, upload an ambiguous file input, or submit. The user reviews the visible page and handles attachments or unsupported widgets manually.
+Generic mode fills only empty, non-sensitive text/select fields that can be grounded in the structured profile. It does not click Apply, upload an ambiguous file input, or submit. It may upload the selected resume only through a visible control explicitly labelled resume/CV; QQ Docs' narrowly identified resume questionnaire is supported this way. The user reviews the visible page and handles unsupported widgets manually.
+
+## Preserve the review browser
+
+`--review` starts system Chrome as an independent process with a loopback-only CDP port. When filling completes, is blocked, or raises an automation error, Playwright disconnects and the Chrome window stays open until the user closes it. Do not add a terminal `input()` hold or call `browser.close()` for this mode.
+
+Use a separate persistent profile for sites that need independent login state or simultaneous review windows:
+
+```powershell
+python -m apply_bot.apply_one "<job-url>" --fill-only --review --profile-dir "apply_bot/.chrome-profile-<site>"
+```
+
+If Chrome really crashes or a page closes, inspect `apply_bot/state/browser_events.jsonl`. Diagnostics may contain the portal, workflow stage, exception type, and URL without its query string or fragment; never add form values, cookies, tokens, or uploaded document contents.
 
 ## Learn from every form
 

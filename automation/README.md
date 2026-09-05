@@ -52,13 +52,13 @@ python -m apply_bot.run_batch --limit 3            # 实际跑前 3 个
 # 5. 站点首次探路（只打开页面输出表单快照，不填写不提交）
 python -m apply_bot.apply_one <url> --probe
 
-# 6. 填写后在浏览器中人工复核；终端按回车后才关闭（仍不提交）
+# 6. 填写后在浏览器中人工复核；命令结束后 Chrome 仍保留（仍不提交）
 python -m apply_bot.apply_one <url> --fill-only --review
 
-# 6a. 完整队列：单一 Chrome、多标签页全部填完并保留（仍不提交）
+# 6a. 完整队列：单一独立 Chrome、多标签页全部填完并保留（仍不提交）
 python -m apply_bot.run_batch --from queue --queue <queue.json> --fill-only --retain-all --require-tailored-cv
 
-# 6b. 未知官网：必须给“申请表直达 URL”，只填普通字段，绝不上传或提交
+# 6b. 未知官网：必须给“申请表直达 URL”，只填普通字段；仅明确简历控件可上传，绝不提交
 python -m apply_bot.apply_one <form-url> --portal generic --fill-only --review
 
 # 7. 打开本机求职进度与表单学习控制台
@@ -120,6 +120,10 @@ python -m apply_bot.email_apply prepare --recipient "jobs@example.com" --subject
    永不进入 SQLite、补充档案或审计日志。
 8. **邮件投递双关卡**：图片岗位先生成本地审核草稿；只有后续对单个草稿明确授权，且
    CLI 再收到精确 `SEND <draft-id>` 口令，才连接 QQ SMTP。授权码只读环境变量，永不落盘。
+9. **审核浏览器独立保活**：`--review` 与 `--retain-all` 通过仅绑定 `127.0.0.1` 的调试端口
+   连接独立系统 Chrome。脚本结束、填写被阻塞或自动化报错时只断开 Playwright，页面继续
+   保留到用户手动关闭；异常阶段写入本机 `state/browser_events.jsonl`，URL 会去掉查询参数和
+   fragment，且不记录表单值、Cookie 或令牌。
 
 ## 抓取 CLI 使用
 
@@ -183,7 +187,8 @@ BOSS只读用户指定页面。51job、智联发现、猎聘、拉勾、牛客�
 未知公司官网可以显式选择 `--portal generic`，但必须
 提供申请表直达 URL，且只能配合 `--probe` 或 `--fill-only`。通用模式复用表单学习器，
 只填写档案中已有的空白普通字段，不猜答案、不上传含义不明的附件、不点击申请按钮、
-永不提交；缺失字段会进入本机控制台。对应可复用入口为
+永不提交；只有可见控件明确标注“简历/CV”时才允许上传选定简历（含已严格识别的腾讯文档
+简历问卷），缺失字段会进入本机控制台。对应可复用入口为
 `.agents/skills/job-form-filler/SKILL.md`。
 
 ## 图片岗位与邮件投递
@@ -255,7 +260,9 @@ pytest automation/apply_bot/tests/test_core.py   # CI / 正常环境
   主路径（上传→补填→勾选→确认），结构不符时自动转探路。
 - **智联「立即投递」可能是一键提交**：确认前绝不点击岗位页按钮，先在独立简历中心
   上传或核验简历；只有终端确认关卡收到 `y` 后才点击。
-- **`--fill-only` 不进入提交确认**，运行结束时 Playwright 会关闭浏览器；单岗位查看现场时
-  加 `--review`。多岗位使用 `--retain-all`，系统只启动一个 Chrome，为每个岗位保留独立
-  标签页，全部处理完后等待终端回车才关闭，期间不会调用任何最终提交按钮。
+- **`--fill-only` 不进入提交确认**；不加 `--review` 时仍沿用运行结束即关闭浏览器的行为。
+  单岗位加 `--review` 后使用独立 Chrome，脚本结束只断开自动化，页面不会被关闭；多岗位
+  使用 `--retain-all`，系统只启动一个独立 Chrome，为每个岗位保留标签页。审核后由用户
+  手动关闭窗口，期间不会调用任何最终提交按钮。不同站点需要并行保留或隔离登录态时，使用
+  `--profile-dir apply_bot/.chrome-profile-<site>`。
 - 本流水线只覆盖「应聘者本人投递」；不做批量海投，不针对任一站点的风控做规避。

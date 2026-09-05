@@ -81,10 +81,53 @@ class GenericFormAdapter(PortalAdapter):
         self, page: Any, job: JobInfo, profile: dict[str, Any], resume: Path | None,
     ) -> list[str]:
         fields = ["启用通用字段结构识别"]
+        uploaded = False
+
+        # QQ Docs questionnaires use custom widgets that expose only one textarea
+        # and a hidden file input in a static snapshot. Fill this narrow, verified
+        # form only when host, identity prompt, and resume label all match.
+        if _is_qqdocs_resume_form(page):
+            textareas = page.locator("textarea:visible")
+            if textareas.count() == 1:
+                target = textareas.first
+                identity_line = _qqdocs_identity_line(profile)
+                if identity_line and not (target.input_value() or "").strip():
+                    target.fill(identity_line)
+                    fields.append("腾讯文档:姓名/学校/专业/毕业时间")
+
+            if resume is not None:
+                # Assigning QQ Docs' hidden file input directly does not update
+                # its form state. Use only the visible, explicit file control and
+                # require UI evidence before recording the upload as successful.
+                add_file = page.get_by_text(re.compile(r"^\s*添加文件\s*$"), exact=False)
+                visible_triggers = []
+                for index in range(min(add_file.count(), 4)):
+                    try:
+                        trigger = add_file.nth(index)
+                        if trigger.is_visible():
+                            visible_triggers.append(trigger)
+                    except Exception:
+                        continue
+                # Multiple upload questions are ambiguous: do not guess which
+                # visible picker belongs to the resume field.
+                if len(visible_triggers) == 1:
+                    try:
+                        trigger = visible_triggers[0]
+                        with page.expect_file_chooser(timeout=5000) as chooser:
+                            trigger.click()
+                        chooser.value.set_files(str(resume))
+                        for _ in range(15):
+                            if _resume_upload_visible(page, resume.name):
+                                uploaded = True
+                                fields.append(f"上传简历:{resume.name}")
+                                break
+                            page.wait_for_timeout(1000)
+                    except Exception:
+                        pass
+
         # Never use "the first file input" on an unknown site. A chooser is safe
         # only when the visible trigger explicitly says resume/CV.
-        uploaded = False
-        if resume is not None:
+        if resume is not None and not uploaded:
             for pattern in (r"上传简历", r"upload\s+(?:resume|cv)", r"resume\s+upload"):
                 trigger = page.get_by_text(re.compile(pattern, re.I), exact=False)
                 for index in range(min(trigger.count(), 8)):
@@ -149,3 +192,57 @@ def _meta_content(page: Any, selector: str) -> str:
         return (loc.get_attribute("content") or "").strip() if loc.count() else ""
     except Exception:
         return ""
+
+
+def _resume_upload_visible(page: Any, filename: str) -> bool:
+    try:
+        matches = page.get_by_text(filename, exact=False)
+        for index in range(min(matches.count(), 6)):
+            if matches.nth(index).is_visible():
+                return True
+        body = page.locator("body").inner_text(timeout=2500)
+        return bool(re.search(r"上传成功|重新上传|删除文件", body))
+    except Exception:
+        return False
+
+
+def _is_qqdocs_resume_form(page: Any) -> bool:
+    try:
+        host = (urlsplit(page.url).hostname or "").lower()
+        if host != "docs.qq.com":
+            return False
+        body = page.locator("body").inner_text(timeout=2500)
+        identity_prompt = re.search(
+            r"姓名\s*\+\s*学校\s*\+\s*专业方向[\s\S]{0,80}毕业时间",
+            body,
+        )
+        return bool(identity_prompt and "简历" in body)
+    except Exception:
+        return False
+
+
+def _qqdocs_identity_line(profile: dict[str, Any]) -> str:
+    identity = profile.get("identity", {})
+    education = profile.get("education", [])
+    bachelor = next((item for item in education if item.get("level") == "本科"), {})
+    master = next((item for item in education if "硕士" in str(item.get("level", ""))), {})
+    graduation = re.sub(r"（预计）|\(预计\)", "", str(master.get("end", ""))).strip()
+    if re.fullmatch(r"\d{4}-\d{2}", graduation):
+        year, month = graduation.split("-", 1)
+        graduation = f"{year}年{int(month)}月"
+    required = (
+        identity.get("name"),
+        bachelor.get("school"),
+        bachelor.get("major"),
+        master.get("school"),
+        master.get("major"),
+        graduation,
+    )
+    if not all(str(value or "").strip() for value in required):
+        return ""
+    return (
+        f"{identity.get('name', '')} + "
+        f"本科：{bachelor.get('school', '')}{bachelor.get('major', '')}，"
+        f"研究生：{master.get('school', '')}{master.get('major', '')} + "
+        f"预计{graduation}毕业"
+    )

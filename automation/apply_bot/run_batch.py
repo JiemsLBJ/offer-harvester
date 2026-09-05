@@ -87,9 +87,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--fill-only", action="store_true",
                     help="安全实验：逐个填表和校验，不进入提交确认，不点击提交")
     ap.add_argument("--review-last", action="store_true",
-                    help="与 --fill-only 配合：最后一个岗位填完后保留浏览器，按回车才关闭")
+                    help="与 --fill-only 配合：最后一个岗位使用独立 Chrome，命令结束后仍保留页面")
     ap.add_argument("--retain-all", action="store_true",
-                    help="与 --fill-only 配合：单一 Chrome 多标签页填写全部岗位并全部保留，绝不提交")
+                    help="与 --fill-only 配合：单一独立 Chrome 多标签页填写并在命令结束后全部保留，绝不提交")
     ap.add_argument("--require-tailored-cv", action="store_true",
                     help="完整流水线护栏：每个队列项必须显式提供存在的 cv 路径，禁止回退通用简历")
     ap.add_argument("--dry-run", action="store_true", help="只打印队列")

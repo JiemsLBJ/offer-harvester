@@ -19,7 +19,7 @@ TESTS_DIR = Path(__file__).resolve().parent
 AUTOMATION_DIR = TESTS_DIR.parents[1]
 sys.path.insert(0, str(AUTOMATION_DIR))
 
-from apply_bot import application_store, config, email_apply, form_learning, gmail_draft, materials, model, source_monitor, state, tracker  # noqa: E402
+from apply_bot import application_store, browser, config, email_apply, form_learning, gmail_draft, materials, model, source_monitor, state, tracker  # noqa: E402
 from apply_bot.confirm import ConfirmContext, confirm, render  # noqa: E402
 from apply_bot.portals import adapter_for_name, adapter_for_url, portal_names  # noqa: E402
 from apply_bot.run_batch import resolve_queue_cv  # noqa: E402
@@ -211,6 +211,62 @@ def test_generic_adapter_never_submits():
         raise AssertionError("通用适配器不得提交")
     except Blocked as exc:
         assert "禁止自动提交" in exc.reason
+
+
+def test_qqdocs_identity_line_uses_supplied_profile_only():
+    from apply_bot.portals.generic import _qqdocs_identity_line
+
+    profile = {
+        "identity": {"name": "测试候选人"},
+        "education": [
+            {"level": "本科", "school": "甲大学", "major": "经济学"},
+            {
+                "level": "硕士（一年级在读）",
+                "school": "乙大学",
+                "major": "数据科学",
+                "end": "2028-06（预计）",
+            },
+        ],
+    }
+    assert _qqdocs_identity_line(profile) == (
+        "测试候选人 + 本科：甲大学经济学，"
+        "研究生：乙大学数据科学 + 预计2028年6月毕业"
+    )
+    assert _qqdocs_identity_line({"identity": {"name": "测试候选人"}, "education": []}) == ""
+
+
+def test_browser_diagnostics_strip_url_secrets_and_runtime_disconnects():
+    assert browser._event_url("https://jobs.example/apply?token=secret#answer") == (
+        "https://jobs.example/apply"
+    )
+
+    old_state_dir = config.STATE_DIR
+    event_dir = TMP / "browser_events"
+    config.STATE_DIR = event_dir
+    try:
+        browser.record_browser_event(
+            "automation_error",
+            stage="填写申请表",
+            url="https://jobs.example/apply?token=secret#answer",
+            error_type="RuntimeError",
+            message="must never be persisted",
+        )
+        event = json.loads((event_dir / "browser_events.jsonl").read_text(encoding="utf-8"))
+        assert event["url"] == "https://jobs.example/apply"
+        assert "message" not in event and "secret" not in json.dumps(event)
+    finally:
+        config.STATE_DIR = old_state_dir
+
+    class _Playwright:
+        stopped = False
+
+        def stop(self):
+            self.stopped = True
+
+    fake = _Playwright()
+    runtime = browser.BrowserRuntime(fake, retained=True)
+    runtime.stop()
+    assert fake.stopped and runtime.retained
 
 
 def test_generic_login_modal_takes_precedence_over_background_form():
