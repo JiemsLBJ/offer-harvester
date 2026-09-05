@@ -67,6 +67,11 @@ SOURCES: list[dict[str, Any]] = [
 
     # 重点公司官网。
     {
+        "portal": "company", "name": "公司官网 · 多招聘系统", "category": "company", "tier": "supplemental", "enabled": True,
+        "mode": "CLI · 官网公开接口", "entry_url": "",
+        "cadence": "按需运行 --sources company", "description": "原生支持美团、飞书招聘、Moka、Greenhouse、Lever、Ashby；实际公司与可用性见配置及每次运行详情，不等于新增自动填表支持。",
+    },
+    {
         "portal": "tencent", "name": "腾讯招聘", "category": "company", "tier": "primary", "enabled": True,
         "mode": "CLI · 官方公开 API", "entry_url": "https://careers.tencent.com/search.html",
         "cadence": "日常同步", "description": "腾讯实习、校招和社招岗位主来源，可读取完整岗位详情。",
@@ -216,6 +221,8 @@ def _seen_inventory(path: Path | None = None) -> tuple[dict[str, int], dict[str,
         return counts, samples
     for key, entry in seen.items():
         portal = str(entry.get("portal") or str(key).split(":", 1)[0]).replace("-search", "")
+        if portal == "company-careers":
+            portal = "company"
         counts[portal] = counts.get(portal, 0) + 1
         if portal not in samples and entry.get("url"):
             raw = str(entry["url"])

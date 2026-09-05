@@ -67,6 +67,10 @@ For each **enabled** portal skill:
 1. Read its `SKILL.md` to find the correct `bun run …` invocation and supported flags.
 2. Translate the query terms from `search-queries.md` into that portal's flag format (e.g. `--key`, `--search-string`, `--query`, filter codes — whatever the portal's SKILL.md specifies).
 3. Scope to the last 14 days using the portal's supported recency **filter** flag (`--jobage`, `--since <YYYY-MM-DD>`, etc. — as documented per portal). A portal with **no recency flag** (jobdanmark offers none) still gets scoped: every portal's search output carries a `date` field, so filter client-side — drop results whose `date` is older than 14 days after the call returns, and never invent a flag the portal's SKILL.md does not document (the CLIs reject unknown flags). `--order PublicationDate` is a sort, and a sort is not a filter — pairing it with a `--limit` is a defensible approximation on a portal that offers nothing better (jobnet), but apply the client-side date filter on top all the same.
+   For `company-careers-search` only, omit `--jobage` on the default discovery pass
+   because these official lists often omit publication dates; label null dates as
+   unverified instead. Still pass `--jobage 14` when the user explicitly requires
+   strict recent postings. See its SKILL.md and Step 2 below.
 4. Cap results to ~20 per call using the portal's limit flag.
 5. Use `--format json` for machine-readable output.
 
@@ -93,6 +97,14 @@ For each promising result from Step 1:
 and URL. For jobs worth a deeper look, fetch full detail with that portal's `detail`
 command (see its SKILL.md — do not guess flags) to extract **key requirements**,
 **application deadline**, and a brief description snippet.
+
+**Company-careers exception:** `company-careers-search` already includes the JD in
+`description`; do not repeat a detail lookup just to retrieve the same payload.
+Surface its per-company `meta.runs` failures/partial coverage and output limit.
+For these official lists, an unknown `date` can remain a date-unverified candidate
+unless the user requested strict recency; never describe it as posted in the last
+14 days. For strict recency, use the skill's `--jobage` filter. Moka's genuine
+`#/job/<id>` routes identify individual postings and must survive URL deduplication.
 
 **From WebSearch results:** Use `WebFetch` on the posting URL and extract the same
 fields manually. If it returns HTTP 403, retry with browser headers via curl per

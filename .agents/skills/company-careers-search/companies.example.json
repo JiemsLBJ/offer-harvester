@@ -1,0 +1,10 @@
+[
+  {"id":"meituan","name":"美团","url":"https://zhaopin.meituan.com/web/social","enabled":true},
+  {"id":"bytedance","name":"字节跳动","url":"https://jobs.bytedance.com","enabled":true},
+  {"id":"minimax","name":"MiniMax","url":"https://vrfi1sk8a0.jobs.feishu.cn","enabled":true},
+  {"id":"deepseek","name":"DeepSeek","url":"https://app.mokahr.com/social-recruitment/high-flyer/140576","enabled":true},
+  {"id":"moonshot","name":"月之暗面","url":"https://app.mokahr.com/apply/moonshot/148506","enabled":true},
+  {"id":"zhipu","name":"智谱AI","url":"https://app.mokahr.com/social-recruitment/zphz/148983","enabled":true},
+  {"id":"anthropic","name":"Anthropic","url":"https://job-boards.greenhouse.io/anthropic","enabled":false},
+  {"id":"elevenlabs","name":"ElevenLabs","url":"https://jobs.ashbyhq.com/elevenlabs","enabled":false}
+]

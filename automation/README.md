@@ -196,6 +196,28 @@ QQ 邮箱发送使用 `smtp.qq.com:465`，账号和授权码只从当前终端�
 
 ## 回归测试（无浏览器）
 
+### 原生公司官网采集
+
+`.agents/skills/company-careers-search` 将 career-ops 的六类招聘系统接口思路移植为本地 Bun CLI，
+不依赖另一份源码或个人档案。`companies.example.json` 默认启用美团、字节、MiniMax、DeepSeek、
+月之暗面、智谱，另附默认关闭的 Greenhouse/Ashby 示例。真实可用性必须看每次返回的 `meta.runs`，
+不得把登记的公司数当作成功抓取数。
+
+```bash
+bun run .agents/skills/company-careers-search/cli/src/cli.ts companies --format table
+bun run automation/sync_seen.ts --sources company --companies deepseek,zhipu --keyword 实习 --location "" --limit 20
+# 确认预览后再加 --write；仅导入候选岗位，fit=unknown，不提交申请。
+bun test ./.agents/skills/company-careers-search/cli/src/providers.test.ts
+```
+
+`--company-config` 可给 sync_seen 指定 JSON 公司表；`--company-max-pages` 默认 3、最大 10。
+CLI 的对应参数是 `--config`、`--max-pages`。默认私有配置路径为 `automation/profile/company_sources.json`，已忽略。
+`sync_seen` 的原五个默认来源不变；新增官网源需显式 `--sources company`；`/scrape` 则自动发现新技能。
+预览不写岗位库或来源日志。写入时保留已有条目，按 URL/公司岗位去重，排除 tracker。
+API 受限时停下并报告；不会自动登录、伪装绕过风控或运行申请步骤。详细接口范围见技能的 `references/providers.md`。
+
+### 原有投递回归
+
 ```bash
 python automation/apply_bot/tests/test_core.py   # 无 pytest 环境直跑
 pytest automation/apply_bot/tests/test_core.py   # CI / 正常环境

@@ -1,3 +1,7 @@
+---
+framework_version: 1.0.1
+---
+
 # Agent Guidelines: Offer Harvester
 
 本仓库是面向中国招聘网站的 AI 求职流水线。任何编码代理(Claude Code、Codex、
@@ -13,8 +17,12 @@ ZCode/GLM、Gemini CLI 等)按本文件接入:先读结构,再守红线,然后�
   面试框架)、`job-scraper`(搜索编排)、`upskill`(技能差距分析)。
 - **`.agents/skills/`** —— 门户搜索 CLI(可移植 Agent Skills 格式,每个目录一个
   `SKILL.md` + 零依赖 bun CLI):`shixiseng-search` `tencent-search` `hotjob-search`
-  `linkedin-search` `freehire-search` `job-form-filler` `image-email-application` 等。
+  `linkedin-search` `freehire-search` `job-form-filler` `image-email-application`
+  `company-careers-search` 等。
   `/scrape` 自动发现遵循契约的技能,无需注册。
+- **`company-careers-search`** —— 原生公司官网采集：美团、飞书招聘、Moka、
+  Greenhouse、Lever、Ashby。配置公司列表即可扩展同类官网，不依赖外部 career-ops。
+  `sync_seen.ts --sources company` 可入库，实际覆盖与失败见每次 `meta.runs`。
 - **`automation/`** —— 自动投递管线。**动手前先读 `automation/README.md`**:
   - 事实源:`automation/profile/profile.json`(结构化档案,从
     `profile.example.json` 复制后填写)与 `job_search_tracker.csv`(追踪表)。
@@ -35,6 +43,8 @@ ZCode/GLM、Gemini CLI 等)按本文件接入:先读结构,再守红线,然后�
 5. **不伪造简历信息**:所有提交内容必须与 profile.json 事实源一致。
 6. 个人数据(`profile.json`、登录态、`state/`、tracker)已被 `.gitignore`
    排除,永远不要提交或外传。
+7. **公司官网导入只是候选岗位**:`fit=unknown` 不得自动升级为可投递岗位；
+   必须先完成事实核验、匹配评估、定向简历绑定和用户队列确认，再进入现有提交关卡。
 
 ## 开工顺序建议
 

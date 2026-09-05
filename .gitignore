@@ -36,6 +36,9 @@ linkedin_Profile.pdf
 .env
 .env.*
 
+# Optional personal company-careers source list; the public example is tracked.
+automation/profile/company_sources.json
+
 # Personal photos and signatures
 *.jpg
 *.jpeg

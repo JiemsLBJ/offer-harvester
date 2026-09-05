@@ -13,6 +13,7 @@
 //   bun run automation/sync_seen.ts --keyword 量化 --limit 10 --write
 //   bun run automation/sync_seen.ts --location 上海
 //   bun run automation/sync_seen.ts --sources shixiseng,tencent
+//   bun run automation/sync_seen.ts --sources company --companies deepseek,zhipu --keyword 实习
 //   bun run automation/sync_seen.ts --no-auto-fit      # 关闭标题关键词快速匹配（fit 全部 unknown）
 //
 // 快速匹配（默认开启）：职位标题含 数据分析/量化/行业研究/数据开发/商业分析/金融工程 等
@@ -29,6 +30,8 @@ import { fetchSearch as fetchTencent } from "../.agents/skills/tencent-search/cl
 import { fetchSearch as fetchLinkedin } from "../.agents/skills/linkedin-search/cli/src/commands/search.js"
 import { fetchSearch as fetchFreehire } from "../.agents/skills/freehire-search/cli/src/commands/search.js"
 import { fetchSearch as fetchHotjob } from "../.agents/skills/hotjob-search/cli/src/commands/search.js"
+import { fetchSearch as fetchCompany } from "../.agents/skills/company-careers-search/cli/src/commands/search.js"
+import { canonicalUrl } from "../.agents/skills/company-careers-search/cli/src/providers.js"
 import { randomUUID } from "node:crypto"
 import { appendFile, mkdir } from "node:fs/promises"
 
@@ -48,7 +51,8 @@ interface SeenEntry {
 const DEFAULT_KEYWORDS = ["数据分析", "量化", "行业研究", "商业分析"]
 const DEFAULT_LOCATION = "上海"
 const DEFAULT_LIMIT = 20
-const ACTIVE_PORTALS = ["shixiseng", "tencent", "linkedin", "freehire", "hotjob"] as const
+const DEFAULT_PORTALS = ["shixiseng", "tencent", "linkedin", "freehire", "hotjob"] as const
+const ACTIVE_PORTALS = [...DEFAULT_PORTALS, "company"] as const
 type ActivePortal = (typeof ACTIVE_PORTALS)[number]
 
 function chinaIso(date = new Date()): string {
@@ -79,8 +83,10 @@ async function readSeen(): Promise<Record<string, SeenEntry>> {
   try {
     const t = Bun.file("job_scraper/seen_jobs.json")
     const j = JSON.parse((await t.text()) || "{}") as { seen?: Record<string, SeenEntry> }
-    return j.seen ?? {}
-  } catch {
+    if (!j.seen || typeof j.seen !== "object" || Array.isArray(j.seen)) throw new Error("seen_jobs.json 缺少有效 seen 对象；停止以免覆盖现库")
+    return j.seen
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e
     return {}
   }
 }
@@ -139,12 +145,15 @@ interface Flags {
   location: string
   limit: number
   sources: ActivePortal[]
+  companies?: string[]
+  companyConfig?: string
+  companyMaxPages?: number
 }
 
 function parseFlags(argv: string[]): Flags {
   const flags: Flags = {
     write: false, autoFit: true, keywords: DEFAULT_KEYWORDS, location: DEFAULT_LOCATION,
-    limit: DEFAULT_LIMIT, sources: [...ACTIVE_PORTALS],
+    limit: DEFAULT_LIMIT, sources: [...DEFAULT_PORTALS],
   }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
@@ -153,6 +162,15 @@ function parseFlags(argv: string[]): Flags {
     else if (a === "--keyword") flags.keywords = [argv[++i] ?? ""]
     else if (a === "--location") flags.location = argv[++i] ?? ""
     else if (a === "--limit") flags.limit = parseInt(argv[++i] ?? "0", 10) || DEFAULT_LIMIT
+    else if (a === "--companies") {
+      flags.companies = (argv[++i] ?? "").split(",").map(s => s.trim()).filter(Boolean)
+      if (!flags.companies.length) throw new Error("--companies 不能为空")
+    }
+    else if (a === "--company-config") {
+      flags.companyConfig = argv[++i]
+      if (!flags.companyConfig || flags.companyConfig.startsWith("--")) throw new Error("--company-config 缺少路径")
+    }
+    else if (a === "--company-max-pages") flags.companyMaxPages = Number(argv[++i])
     else if (a === "--sources") {
       const requested = (argv[++i] ?? "").split(",").map((value) => value.trim()).filter(Boolean)
       const unknown = requested.filter((value) => !ACTIVE_PORTALS.includes(value as ActivePortal))
@@ -163,13 +181,17 @@ function parseFlags(argv: string[]): Flags {
       flags.sources = requested as ActivePortal[]
     }
     else if (a === "--help" || a === "-h") {
-      console.log("sync_seen.ts 用法见文件头注释")
+      console.log("sync_seen.ts [--sources shixiseng,tencent,linkedin,freehire,hotjob,company] [--keyword 关键词] [--location 城市] [--limit 20] [--companies deepseek,zhipu] [--company-config JSON路径] [--company-max-pages 3] [--write]；默认保留原五个来源，公司官网显式使用 --sources company")
       process.exit(0)
     } else {
       console.error(`未知参数: ${a}`)
       process.exit(1)
     }
   }
+  if (flags.companyMaxPages !== undefined && (!Number.isSafeInteger(flags.companyMaxPages) || flags.companyMaxPages < 1 || flags.companyMaxPages > 10))
+    throw new Error("--company-max-pages 必须是 1–10 的整数")
+  if ((flags.companies || flags.companyConfig || flags.companyMaxPages !== undefined) && !flags.sources.includes("company"))
+    throw new Error("公司配置参数需要同时指定 --sources company（可与原来源逗号组合）")
   return flags
 }
 
@@ -191,7 +213,11 @@ function englishCity(location: string): string {
   return aliases[location.trim()] ?? location.trim()
 }
 
-async function fetchPortal(portal: ActivePortal, keyword: string, flags: Flags): Promise<{ results: PortalResult[] }> {
+async function fetchPortal(portal: ActivePortal, keyword: string, flags: Flags): Promise<{ results: PortalResult[]; meta?: { errors?: string[]; warnings?: string[]; runs?: unknown[]; output_truncated?: boolean } }> {
+  if (portal === "company") {
+    return fetchCompany({ query: keyword, location: flags.location, limit: flags.limit,
+      companies: flags.companies, config: flags.companyConfig, maxPages: flags.companyMaxPages })
+  }
   if (portal === "shixiseng") {
     return fetchShixiseng({ query: keyword, location: flags.location, page: 1, limit: flags.limit, format: "json" })
   }
@@ -220,6 +246,7 @@ async function fetchPortal(portal: ActivePortal, keyword: string, flags: Flags):
 }
 
 const SOURCE_META: Record<ActivePortal, { mode: string; entryUrl: string }> = {
+  company: { mode: "cli-company-api", entryUrl: "" },
   shixiseng: { mode: "cli-ssr", entryUrl: "https://www.shixiseng.com/interns" },
   tencent: { mode: "cli-api", entryUrl: "https://careers.tencent.com/search.html" },
   linkedin: { mode: "cli-public-pages", entryUrl: "https://www.linkedin.com/jobs/" },
@@ -227,11 +254,23 @@ const SOURCE_META: Record<ActivePortal, { mode: string; entryUrl: string }> = {
   hotjob: { mode: "cli-api", entryUrl: "https://wecruit.hotjob.cn/SU64365a780dcad43c5ae82bab/pb/interns.html" },
 }
 
-async function main() {
-  const flags = parseFlags(process.argv.slice(2))
+interface SyncServices {
+  readSeen: typeof readSeen
+  readTrackerKeys: typeof readTrackerKeys
+  fetchPortal: typeof fetchPortal
+  writeSeen: typeof writeSeen
+  appendSourceRun: typeof appendSourceRun
+}
+
+export async function runSync(argv = process.argv.slice(2), overrides: Partial<SyncServices> = {}) {
+  const services = { readSeen, readTrackerKeys, fetchPortal, writeSeen, appendSourceRun, ...overrides }
+  const flags = parseFlags(argv)
   const batchId = randomUUID()
-  const seen = await readSeen()
-  const trackerKeys = await readTrackerKeys()
+  const seen = await services.readSeen()
+  const originalCount = Object.keys(seen).length
+  const trackerKeys = await services.readTrackerKeys()
+  const seenUrls = new Set(Object.values(seen).map(e => canonicalUrl(e.url)))
+  const seenRoles = new Set(Object.values(seen).map(e => roleKey(e.company, e.title)))
   const newEntries: Array<{ key: string; portal: string; entry: SeenEntry }> = []
   const errors: string[] = []
 
@@ -241,16 +280,23 @@ async function main() {
     const portalErrors: string[] = []
     const portalJobs = new Map<string, Record<string, unknown>>()
     let rawDiscoveredCount = 0
+    const companyRuns: unknown[] = []
     for (const kw of flags.keywords) {
       try {
-        const out = await fetchPortal(portal, kw, flags)
+        const out = await services.fetchPortal(portal, kw, flags)
+        if (portal === "company") {
+          companyRuns.push(...(out.meta?.runs ?? []))
+          const notices = [...(out.meta?.errors ?? []), ...(out.meta?.warnings ?? [])].map(m => `${kw}: ${m}`)
+          if (out.meta?.output_truncated) notices.push(`${kw}: 达到输出条数上限，未导入全部匹配岗位`)
+          portalErrors.push(...notices); errors.push(...notices)
+        }
         rawDiscoveredCount += out.results.length
         for (const r of out.results) {
           if (!r.id || !r.url) continue
           const key = `${portal}:${r.id}`
-          const existed = Boolean(seen[key])
+          const existed = Boolean(seen[key]) || seenUrls.has(canonicalUrl(r.url)) || seenRoles.has(roleKey(r.company, r.title))
           // tracker 去重：公司+岗位 大小写不敏感
-          const tracked = trackerKeys.has(`${(r.company ?? "").toLowerCase()}|${r.title.toLowerCase()}`)
+          const tracked = trackerKeys.has(roleKey(r.company, r.title))
           let added = false
           if (!existed && !tracked) {
             seen[key] = {
@@ -260,12 +306,13 @@ async function main() {
               first_seen: TODAY,
               deadline: r.deadline ?? null,
               location: r.location ?? "",
-              fit: flags.autoFit ? quickFit(r.title, r.company ?? "") : "unknown",
+              fit: flags.autoFit && portal !== "company" ? quickFit(r.title, r.company ?? "") : "unknown",
               status: "new",
-              portal: `${portal}-search`,
+              portal: portal === "company" ? "company-careers-search" : `${portal}-search`,
               source: "cli",
             }
             newEntries.push({ key, portal, entry: seen[key]! })
+            seenUrls.add(canonicalUrl(r.url)); seenRoles.add(roleKey(r.company, r.title))
             portalNewCount += 1
             added = true
           }
@@ -277,7 +324,7 @@ async function main() {
             location: r.location ?? "",
             date: r.date ?? null,
             url: r.url,
-            fit: seen[key]?.fit ?? (flags.autoFit ? quickFit(r.title, r.company ?? "") : "unknown"),
+            fit: seen[key]?.fit ?? (flags.autoFit && portal !== "company" ? quickFit(r.title, r.company ?? "") : "unknown"),
             is_new: Boolean(previous?.is_new) || added,
             already_tracked: tracked,
           })
@@ -291,11 +338,11 @@ async function main() {
     const discoveredCount = portalJobs.size
     const status = portalErrors.length ? (discoveredCount ? "warning" : "error") : (discoveredCount ? "success" : "warning")
     const message = portalErrors.length
-      ? `${portalErrors.length} 个关键词失败；成功读取 ${discoveredCount} 条。`
+      ? `${portalErrors.length} 项来源异常或覆盖不完整；已读取 ${discoveredCount} 条。`
       : discoveredCount
         ? `成功读取 ${discoveredCount} 条岗位。`
         : "官网返回 0 条岗位，请检查关键词、地点或站点状态。"
-    await appendSourceRun({
+    if (flags.write) await services.appendSourceRun({
       id: randomUUID(), portal, status,
       mode: SOURCE_META[portal].mode,
       keyword: flags.keywords.join("、"), location: flags.location,
@@ -308,22 +355,23 @@ async function main() {
         errors: portalErrors,
         raw_count: rawDiscoveredCount,
         jobs: [...portalJobs.values()],
+        ...(portal === "company" ? { company_runs: companyRuns } : {}),
       },
     })
   }
 
-  console.log(`扫描完成：现库 ${Object.keys(seen).length} 条，本次新增 ${newEntries.length} 条`)
+  console.log(`扫描完成：扫描前现库 ${originalCount} 条，候选新增 ${newEntries.length} 条`)
   for (const n of newEntries) {
     console.log(`  + [${n.entry.fit}] ${n.portal} | ${n.entry.company} - ${n.entry.title}`)
     console.log(`    ${n.entry.url}`)
   }
   if (errors.length) {
-    console.log("\n失败项（CLI 层错误，可重试）:")
+    console.log("\n来源异常或覆盖提醒（受限站点不自动重试）:")
     for (const e of errors) console.log(`  ! ${e}`)
   }
 
   if (flags.write && newEntries.length > 0) {
-    await writeSeen(seen)
+    await services.writeSeen(seen)
     console.log(`\n已写入 job_scraper/seen_jobs.json（+${newEntries.length}）`)
   } else if (flags.write) {
     console.log("\n无新增，文件未改动")
@@ -332,7 +380,11 @@ async function main() {
   }
 }
 
-main().catch((e) => {
+export function roleKey(company: string | null | undefined, title: string): string {
+  return `${(company ?? "").trim().toLowerCase()}|${title.trim().toLowerCase()}`
+}
+
+if (import.meta.main) runSync().catch((e) => {
   console.error(`sync_seen 失败: ${e instanceof Error ? e.message : String(e)}`)
   process.exit(1)
 })

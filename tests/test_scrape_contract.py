@@ -47,6 +47,10 @@ def derive_contract_fields() -> frozenset[str]:
 def search_output_source(search_ts: Path) -> str:
     helpers_ts = search_ts.parent.parent / "helpers.ts"
     files = [search_ts, helpers_ts] if helpers_ts.exists() else [search_ts]
+    # Multi-employer CLI normalizes every provider in one shared module.
+    providers_ts = search_ts.parent.parent / "providers.ts"
+    if providers_ts.exists():
+        files.append(providers_ts)
     return "\n".join(f.read_text(encoding="utf-8") for f in files)
 
 

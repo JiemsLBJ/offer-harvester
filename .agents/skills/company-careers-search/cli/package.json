@@ -1,0 +1,6 @@
+{
+  "name": "company-careers-search",
+  "private": true,
+  "type": "module",
+  "scripts": { "test": "bun test ./src/providers.test.ts" }
+}

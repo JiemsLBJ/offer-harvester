@@ -320,6 +320,30 @@ python -m apply_bot.email_apply prepare --recipient "jobs@example.com" --subject
 
 完整规则见 <code>.claude/commands/apply-email.md</code>。
 
+### 路径 D：直接搜索公司官网
+
+公司官网采集能力现已直接集成到 Offer Harvester，借鉴 career-ops 的招聘系统适配器，
+无需安装或启动另一个项目。支持美团、飞书招聘、Moka、Greenhouse、Lever、Ashby 六类接口；
+默认配置美团、字节、MiniMax、DeepSeek、月之暗面、智谱，腾讯和德勤继续走原有技能。
+这表示已有解析代码和公司入口，不保证每个网站在当前网络都可抓取；以每次运行记录为准。
+
+~~~powershell
+bun run .agents/skills/company-careers-search/cli/src/cli.ts companies --format table
+bun run .agents/skills/company-careers-search/cli/src/cli.ts search -q "实习" --companies deepseek,zhipu --limit 20 --format table
+# 只预览，不写盘；省略城市过滤以查看这些公司各城市的岗位
+bun run automation/sync_seen.ts --sources company --companies deepseek,zhipu --keyword 实习 --location "" --limit 20
+# 需要入库时给上一条命令加 --write
+~~~
+
+<code>/scrape</code> 自动发现 <code>company-careers-search</code>。同类公司的扩展只需提供
+官方招聘系统 URL 并加入公司配置；私有完整列表放在已忽略的
+<code>automation/profile/company_sources.json</code>，具体格式见技能内
+<code>companies.example.json</code>。配置不会自动枚举全网公司，也不能接通未适配系统。
+
+分页截断、日期未知、robots 限制和接口失败均显式报告；不绕过验证码或风控。
+新增岗位以 <code>fit=unknown</code> 进入现有岗位库，之后继续 <code>/rank</code>、定向简历和
+逐岗位人工确认；本次增强不等于增加对应公司的自动填表或投递能力。
+
 ## 输出长什么样
 
 岗位搜索 CLI 统一支持 <code>json</code>、<code>table</code>、<code>plain</code> 等输出格式，
@@ -428,6 +452,7 @@ git ls-files
 | 浏览器投递管线 | 否 | Python + Playwright，本地运行 |
 | 本地 Dashboard | 否 | Node.js 前端 + Python API |
 | 工作流规范 | 弱依赖 | 权威规范在 <code>.claude/commands</code>、<code>.claude/skills</code> 和 <code>AGENTS.md</code> |
+| 公司官网采集 | 原生 Bun CLI | 多招聘系统配置化搜索；接入 `/scrape` 和岗位库，不依赖 career-ops |
 | Slash command | 取决于 Agent | 不支持 slash command 时改用自然语言并要求读取对应规范 |
 | 材料起草质量 | 取决于模型 | 同一事实和规则，不同模型的分析与写作质量会不同 |
 
@@ -491,7 +516,8 @@ offer-harvester/
 ├─ .agents/skills/
 │  ├─ *-search/                      可移植招聘站点搜索 CLI
 │  ├─ job-form-filler/               表单填写技能入口
-│  └─ image-email-application/       图片招聘帖邮件申请入口
+│  ├─ image-email-application/       图片招聘帖邮件申请入口
+│  └─ company-careers-search/        公司官网多招聘系统采集，原生集成
 ├─ automation/
 │  ├─ apply_bot/
 │  │  ├─ portals/                    站点适配器与通用安全适配器
